@@ -15,21 +15,61 @@ delim:
 
 .global _start
 
-print_char_utf8_2byte:  # args: ch
+putstr:  # args: len, str...
+    push ebp
     mov ebp, esp
 
-    mov eax, [ebp + 4]
+    # len
+    add esp, 8
+    mov edx, [esp]
+
+    # str
+    add esp, 4
+    mov ecx, esp
+
+    mov eax, 4  # write(fd, buf, count)
+    mov ebx, 1  # stdout
+    int 0x80
+
+    mov esp, ebp
+    pop ebp
+    ret
+
+getch:  # return: ch
+    push 0
+
+    mov eax, 3  # read(fd, buf, count)
+    mov ebx, 0  # stdin
+    mov ecx, esp
+    mov edx, 1
+    int 0x80
+
+    pop eax
+    ret
+
+exit:
+    mov eax, 1  # exit()
+    mov ebx, 0
+    int 0x80
+
+    ret
+
+print_char_utf8_2byte:  # args: ch
+    push ebp
+    mov ebp, esp
+
+    mov eax, [ebp + 8]
 
     # prepare 1st byte
     mov ebx, eax
-    and ebx, 0x7c0
+    and ebx, 0x7C0
     shl ebx, 2
-    or ebx, 0xc000
+    or ebx, 0xC000
 
     # prepare 2nd byte
     mov ecx, eax
     mov ecx, eax
-    and ecx, 0x3f
+    and ecx, 0x3F
     or ecx, 0x80
 
     # merge
@@ -40,18 +80,18 @@ print_char_utf8_2byte:  # args: ch
     # change endian-ness
     bswap eax
     shr eax, 16
-    push eax
 
-    mov eax, 4  # write(fd, buf, count)
-    mov ebx, 1  # stdout
-    mov ecx, esp
-    mov edx, 2
-    int 0x80
+    # print
+    push eax
+    push 2
+    call putstr
 
     mov esp, ebp
+    pop ebp
     ret
 
 print_char_hex:  # args: ch
+    push ebp
     mov ebp, esp
 
     # push 'h' to stack
@@ -59,7 +99,7 @@ print_char_hex:  # args: ch
     movb [esp], 0x68  # 'h'
 
     # start spliting arg to digits
-    mov eax, [ebp + 4]
+    mov eax, [ebp + 8]
 
 __print_char_hex_loop1:
     mov ebx, eax
@@ -84,14 +124,16 @@ __print_char_hex_if_end:
     cmp eax, 0
     jne __print_char_hex_loop1
 
-    mov eax, 4  # write(fd, buf, count)
-    mov ebx, 1  # stdout
-    mov ecx, esp
-    mov edx, ebp
-    sub edx, esp
-    int 0x80
+    # calc len
+    mov ecx, ebp
+    sub ecx, esp
+
+    # print
+    push ecx
+    call putstr
 
     mov esp, ebp
+    pop ebp
     ret
 
 print_delim:
@@ -104,15 +146,15 @@ print_delim:
     ret
 
 print_newline:
-    push 0x0a  # '\n'
+    push ebp
+    mov ebp, esp
 
-    mov eax, 4  # write(fd, buf, count)
-    mov ebx, 1  # stdout
-    mov ecx, esp
-    mov edx, 1
-    int 0x80
+    push 0x0A  # '\n'
+    push 1
+    call putstr
 
-    add esp, 4
+    mov esp, ebp
+    pop ebp
     ret
 
 print_char_with_hex_with_newline:  # args: ch
@@ -127,25 +169,6 @@ print_char_with_hex_with_newline:  # args: ch
     add esp, 4
 
     call print_newline
-
-    ret
-
-getch:  # return: ch
-    push 0
-
-    mov eax, 3  # read(fd, buf, count)
-    mov ebx, 0  # stdin
-    mov ecx, esp
-    mov edx, 1
-    int 0x80
-
-    pop eax
-    ret
-
-exit:
-    mov eax, 1  # exit()
-    mov ebx, 0
-    int 0x80
 
     ret
 
