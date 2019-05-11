@@ -37,17 +37,29 @@ exit:
     ret
 
 _start:
-    push 0x41  # 'A'
+    call getch
+
+    inc eax
+
+    mov ecx, 2
+
+__loop1:
+    push eax
+    push ecx
+
+    push eax
     call putch
     add esp, 4
 
-    push 0x42  # 'B'
+    push 0x0A  # '\n'
     call putch
     add esp, 4
 
-    push 0x43  # 'C'
-    call putch
-    add esp, 4
+    pop ecx
+    pop eax
+
+    inc eax
+    loop __loop1
 
     call getch
 
