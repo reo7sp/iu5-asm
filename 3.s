@@ -47,11 +47,11 @@ __loop1:
     push eax
     push ecx
 
-    push eax
+    push eax  # putch: ch
     call putch
     add esp, 4
 
-    push 0x0A  # '\n'
+    push 0x0A  # '\n'  # putch: ch
     call putch
     add esp, 4
 

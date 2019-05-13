@@ -58,7 +58,7 @@ print_char_utf8_2byte:  # args: ch
     push ebp
     mov ebp, esp
 
-    mov eax, [ebp + 8]
+    mov eax, [ebp + 8]  # ch
 
     # prepare 1st byte
     mov ebx, eax
@@ -82,8 +82,9 @@ print_char_utf8_2byte:  # args: ch
     shr eax, 16
 
     # print
-    push eax
-    push 2
+    sub esp, 2
+    movw [esp], ax  # putstr: str
+    push 2  # putstr: len
     call putstr
 
     mov esp, ebp
@@ -95,11 +96,11 @@ print_char_hex:  # args: ch
     mov ebp, esp
 
     # push 'h' to stack
-    dec esp
-    movb [esp], 0x68  # 'h'
+    sub esp, 1
+    movb [esp], 0x68  # '\n'  # putstr: str
 
     # start spliting arg to digits
-    mov eax, [ebp + 8]
+    mov eax, [ebp + 8]  # ch
 
 __print_char_hex_loop1:
     mov ebx, eax
@@ -118,8 +119,8 @@ __print_char_hex_if__is_char:
     sub ebx, 0xA
 
 __print_char_hex_if_end:
-    dec esp
-    movb [esp], bl
+    sub esp, 1
+    movb [esp], bl  # putstr: str
 
     cmp eax, 0
     jne __print_char_hex_loop1
@@ -129,7 +130,7 @@ __print_char_hex_if_end:
     sub ecx, esp
 
     # print
-    push ecx
+    push ecx  # putstr: len
     call putstr
 
     mov esp, ebp
@@ -149,8 +150,9 @@ print_newline:
     push ebp
     mov ebp, esp
 
-    push 0x0A  # '\n'
-    push 1
+    sub esp, 1
+    movb [esp], 0x0A  # '\n'  # putstr: str
+    push 1  # putstr: len
     call putstr
 
     mov esp, ebp
@@ -158,18 +160,18 @@ print_newline:
     ret
 
 print_char_with_hex_with_newline:  # args: ch
-    push [esp + 4]
+    push ebp
+    mov ebp, esp
+
+    push [esp + 4]  # ch  # print_char_utf8_2byte, print_char_hex: ch
+
     call print_char_utf8_2byte
-    add esp, 4
-
     call print_delim
-
-    push [esp + 4]
     call print_char_hex
-    add esp, 4
-
     call print_newline
 
+    mov esp, ebp
+    pop ebp
     ret
 
 _start:
@@ -179,7 +181,7 @@ _start:
 __loop1:
     push ecx
 
-    push eax
+    push eax  # print_char_with_hex_with_newline: ch
     call print_char_with_hex_with_newline
     pop eax
 
