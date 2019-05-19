@@ -6,7 +6,7 @@
 .data
 
 delim:
-    .ascii " - "
+.ascii " - "
 
 .set delim_len, . - delim
 
