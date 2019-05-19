@@ -84,7 +84,7 @@ print_char_utf8_2byte:  # args: ch
     # print
     sub esp, 2
     movw [esp], ax  # putstr: str
-    push 2  # putstr: len
+    push 2          # putstr: len
     call putstr
 
     mov esp, ebp
@@ -152,7 +152,7 @@ print_newline:
 
     sub esp, 1
     movb [esp], 0x0A  # '\n'  # putstr: str
-    push 1  # putstr: len
+    push 1                    # putstr: len
     call putstr
 
     mov esp, ebp
@@ -163,7 +163,7 @@ print_char_with_hex_with_newline:  # args: ch
     push ebp
     mov ebp, esp
 
-    push [esp + 4]  # ch  # print_char_utf8_2byte, print_char_hex: ch
+    push [esp + 8]  # ch  # print_char_utf8_2byte: ch  # print_char_hex: ch
 
     call print_char_utf8_2byte
     call print_delim
@@ -179,13 +179,15 @@ _start:
     mov ecx, 20
 
 __loop1:
+    push eax
     push ecx
 
     push eax  # print_char_with_hex_with_newline: ch
     call print_char_with_hex_with_newline
-    pop eax
+    add esp, 4
 
     pop ecx
+    pop eax
 
     inc eax
     loop __loop1
