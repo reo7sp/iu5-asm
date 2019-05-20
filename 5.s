@@ -168,43 +168,6 @@ term_canon:
     pop ebp
     ret
 
-print_char_utf8_2byte:  # args: ch
-    push ebp
-    mov ebp, esp
-
-    mov eax, [ebp + 8]  # ch
-
-    # prepare 1st byte
-    mov ebx, eax
-    and ebx, 0x7C0
-    shl ebx, 2
-    or ebx, 0xC000
-
-    # prepare 2nd byte
-    mov ecx, eax
-    mov ecx, eax
-    and ecx, 0x3F
-    or ecx, 0x80
-
-    # merge
-    mov eax, 0
-    or eax, ebx
-    or eax, ecx
-
-    # change endian-ness
-    bswap eax
-    shr eax, 16
-
-    # print
-    sub esp, 2
-    movw [esp], ax  # putstr: str
-    push 2          # putstr: len
-    call putstr
-
-    mov esp, ebp
-    pop ebp
-    ret
-
 print_char_hex:  # args: ch
     push ebp
     mov ebp, esp
@@ -251,6 +214,46 @@ __print_char_hex_if_end:
     pop ebp
     ret
 
+transform_n:  # args: i, len  # return: i
+    push ebp
+    mov ebp, esp
+
+#   for i in range(len(a)):
+#       if i < (len(a) >> 1) + 1:
+#           i <<= 1
+#       else:
+#           i = len(a) - i
+#           i <<= 1
+#           i -= 1
+#       print(i)
+
+    mov eax, [ebp + 8]  # i
+
+    mov ebx, [ebp + 12]  # len
+    inc ebx
+    shr ebx, 1
+
+    cmp eax, ebx
+    jl __transform_n_first_half
+    jmp __transform_n_second_half
+
+__transform_n_first_half:
+    shl eax, 1
+
+    jmp __transform_n_end
+
+__transform_n_second_half:
+    mov ebx, [ebp + 12]  # len
+    sub ebx, eax
+    mov eax, ebx
+    shl eax, 1
+    dec eax
+
+__transform_n_end:
+    mov esp, ebp
+    pop ebp
+    ret
+
 print_char_hexes:  # args: cnt, chs...
     push ebp
     mov ebp, esp
@@ -276,7 +279,12 @@ __print_char_hexes_loop1:
     push ecx
     push edx
 
-    push [ebp + ecx * 4 + 12]  # print_char_hex: ch
+    push edx  # transform_n: len
+    push ecx  # transform_n: i
+    call transform_n
+    add esp, 8
+
+    push [ebp + eax * 4 + 12]  # print_char_hex: ch
     call print_char_hex
     add esp, 4
 
