@@ -35,41 +35,34 @@ putstr:  # args: len, str...
     pop ebp
     ret
 
-getch:  # return: ch
-    push 0
-
-    mov eax, 3  # read(fd, buf, count)
-    mov ebx, 0  # stdin
-    mov ecx, esp
-    mov edx, 1
-    int 0x80
-
-    pop eax
-    ret
-
-exit:
-    mov eax, 1  # exit()
-    mov ebx, 0
-    int 0x80
-
-    ret
-
 print_char_utf8_2byte:  # args: ch
     push ebp
     mov ebp, esp
 
     mov eax, [ebp + 8]  # ch
 
+    cmp eax, 0xff
+    jg __print_char_utf8_2byte_case_2byte
+
+__print_char_utf8_2byte_case_1byte:
+    sub esp, 1
+    movb [esp], al  # putstr: str
+    push 1          # putstr: len
+    call putstr
+
+    jmp __print_char_utf8_2byte_end
+
+__print_char_utf8_2byte_case_2byte:
     # prepare 1st byte
     mov ebx, eax
-    and ebx, 0x7C0
+    and ebx, 0x7c0
     shl ebx, 2
-    or ebx, 0xC000
+    or ebx, 0xc000
 
     # prepare 2nd byte
     mov ecx, eax
     mov ecx, eax
-    and ecx, 0x3F
+    and ecx, 0x3f
     or ecx, 0x80
 
     # merge
@@ -87,6 +80,7 @@ print_char_utf8_2byte:  # args: ch
     push 2          # putstr: len
     call putstr
 
+__print_char_utf8_2byte_end:
     mov esp, ebp
     pop ebp
     ret
@@ -174,8 +168,93 @@ print_char_with_hex_with_newline:  # args: ch
     pop ebp
     ret
 
+parse_utf8_2byte:  # args: ch  # return: ch
+    push ebp
+    mov ebp, esp
+
+    mov eax, [esp + 8]
+    cmp eax, 0xff
+    jg __parse_utf8_2byte_case_2byte
+
+__parse_utf8_2byte_case_1byte:
+    jmp __parse_utf8_2byte_end
+
+__parse_utf8_2byte_case_2byte:
+    # prepare 1st byte
+    mov ebx, eax
+    and ebx, 0x1f00
+    shr ebx, 2
+
+    # prepare 2nd byte
+    mov ecx, eax
+    and ecx, 0x3f
+
+    # merge
+    mov eax, 0
+    or eax, ebx
+    or eax, ecx
+
+__parse_utf8_2byte_end:
+    mov esp, ebp
+    pop ebp
+    ret
+
+getch:  # return: ch
+    push 0
+
+    mov eax, 3  # read(fd, buf, count)
+    mov ebx, 0  # stdin
+    mov ecx, esp
+    mov edx, 1
+    int 0x80
+
+    pop eax
+    ret
+
+getch_2byte:  # return: ch
+    push ebp
+    mov ebp, esp
+
+    call getch
+
+    mov ebx, eax
+    and ebx, 0xff
+    and ebx, 0x80
+    cmp ebx, 0
+    je __getch_2byte_end
+
+__getch_2byte_case_2byte:
+    push eax
+
+    call getch
+    mov ebx, eax
+
+    pop eax
+
+    shl ebx, 8
+    or eax, ebx
+
+    bswap eax
+    shr eax, 16
+
+    push eax  # parse_utf8_2byte: ch
+    call parse_utf8_2byte
+
+__getch_2byte_end:
+    mov esp, ebp
+    pop ebp
+    ret
+
+exit:
+    mov eax, 1  # exit()
+    mov ebx, 0
+    int 0x80
+
+    ret
+
 _start:
-    mov eax, 0x410  # 'А'
+    call getch_2byte  # writes eax
+
     mov ecx, 20
 
 __loop1:

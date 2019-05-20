@@ -1,6 +1,19 @@
-# gcc -nostdlib -m32 5.s
+# gcc -nostdlib -m32 7.s
 
 .intel_syntax noprefix
+
+
+.data
+
+hello_msg:
+.ascii "Enter hex number> "
+
+.set hello_msg_len, . - hello_msg
+
+delim:
+.ascii " = "
+
+.set delim_len, . - delim
 
 
 .bss
@@ -168,44 +181,7 @@ term_canon:
     pop ebp
     ret
 
-print_char_utf8_2byte:  # args: ch
-    push ebp
-    mov ebp, esp
-
-    mov eax, [ebp + 8]  # ch
-
-    # prepare 1st byte
-    mov ebx, eax
-    and ebx, 0x7C0
-    shl ebx, 2
-    or ebx, 0xC000
-
-    # prepare 2nd byte
-    mov ecx, eax
-    mov ecx, eax
-    and ecx, 0x3F
-    or ecx, 0x80
-
-    # merge
-    mov eax, 0
-    or eax, ebx
-    or eax, ecx
-
-    # change endian-ness
-    bswap eax
-    shr eax, 16
-
-    # print
-    sub esp, 2
-    movw [esp], ax  # putstr: str
-    push 2          # putstr: len
-    call putstr
-
-    mov esp, ebp
-    pop ebp
-    ret
-
-print_char_hex:  # args: ch
+print_hex:  # args: num
     push ebp
     mov ebp, esp
 
@@ -214,30 +190,30 @@ print_char_hex:  # args: ch
     movb [esp], 0x68  # '\n'  # putstr: str
 
     # start spliting arg to digits
-    mov eax, [ebp + 8]  # ch
+    mov eax, [ebp + 8]  # num
 
-__print_char_hex_loop1:
+__print_hex_loop1:
     mov ebx, eax
     and ebx, 0xF
     shr eax, 4
 
     cmp ebx, 0x9
-    ja __print_char_hex_if__is_char
+    ja __print_hex_if__is_char
 
-__print_char_hex_if__is_digit:
+__print_hex_if__is_digit:
     add ebx, 0x30
-    jmp __print_char_hex_if_end
+    jmp __print_hex_if_end
 
-__print_char_hex_if__is_char:
+__print_hex_if__is_char:
     add ebx, 0x41
     sub ebx, 0xA
 
-__print_char_hex_if_end:
+__print_hex_if_end:
     sub esp, 1
     movb [esp], bl  # putstr: str
 
     cmp eax, 0
-    jne __print_char_hex_loop1
+    jne __print_hex_loop1
 
     # calc len
     mov ecx, ebp
@@ -251,55 +227,39 @@ __print_char_hex_if_end:
     pop ebp
     ret
 
-print_char_hexes:  # args: cnt, chs...
+print_dec:  # args: num
     push ebp
     mov ebp, esp
 
-    # cnt
-    mov edx, [ebp + 8]
+    # start spliting arg to digits
+    mov ecx, [ebp + 8]  # num
 
-    cmp edx, 0
-    je __print_char_hexes_loop1_end
+__print_dec_loop1:
+    mov eax, ecx
+    mov ebx, 10
+    div ebx
+    mov ebx, edx
 
-    # chs
-    mov ecx, 0
+    mov eax, ecx
+    mov ecx, 10
+    div ecx
+    mov ecx, eax
 
-__print_char_hexes_loop1:
-    push ecx
-    push edx
+    add ebx, 0x30
 
-    call print_space
+    sub esp, 1
+    movb [esp], bl  # putstr: str
 
-    pop edx
-    pop ecx
+    cmp ecx, 0
+    jne __print_dec_loop1
 
-    push ecx
-    push edx
+    # calc len
+    mov ecx, ebp
+    sub ecx, esp
 
-    push [ebp + ecx * 4 + 12]  # print_char_hex: ch
-    call print_char_hex
-    add esp, 4
-
-    pop edx
-    pop ecx
-
-    inc ecx
-    cmp ecx, edx
-    je __print_char_hexes_loop1_end
-
-    jmp __print_char_hexes_loop1
-
-__print_char_hexes_loop1_end:
-    mov esp, ebp
-    pop ebp
-    ret
-
-print_space:
-    push ebp
-    mov ebp, esp
-
-    push 0x20  # ' '  # putch: ch
-    call putch
+    # print
+    push ecx  # putstr: len
+    call putstr
 
     mov esp, ebp
     pop ebp
@@ -316,46 +276,170 @@ print_newline:
     pop ebp
     ret
 
+print_hello:
+    mov eax, 4  # write(fd, buf, count)
+    mov ebx, 1  # stdout
+    mov ecx, offset hello_msg
+    mov edx, hello_msg_len
+    int 0x80
+
+    ret
+
+print_delim:
+    mov eax, 4  # write(fd, buf, count)
+    mov ebx, 1  # stdout
+    mov ecx, offset delim
+    mov edx, delim_len
+    int 0x80
+
+    ret
+
+parse_ch:  # args: ch  # return: num, is_err
+    push ebp
+    mov ebp, esp
+
+    mov eax, [ebp + 8]  # ch
+
+__get_hex_challenge_dec_start:
+    cmp eax, 0x30  # '1'
+    jl __get_hex_challenge_hex_start
+
+__get_hex_challenge_dec_continue:
+    cmp eax, 0x39  # '9'
+    jg __get_hex_challenge_hex_start
+
+__get_hex_challenge_dec_pass:
+    sub eax, 0x30  # '1'
+    add eax, 1
+    mov ebx, 0
+    jmp __get_hex_end
+
+__get_hex_challenge_hex_start:
+    cmp eax, 0x41  # 'A'
+    jl __get_hex_challenge_hex2_start
+
+__get_hex_challenge_hex_continue:
+    cmp eax, 0x46  # 'F'
+    jg __get_hex_challenge_hex2_start
+
+__get_hex_challenge_hex_pass:
+    sub eax, 0x41  # 'A'
+    add eax, 0xa
+    mov ebx, 0
+    jmp __get_hex_end
+
+__get_hex_challenge_hex2_start:
+    cmp eax, 0x61  # 'a'
+    jl __get_hex_fail
+
+__get_hex_challenge_hex2_continue:
+    cmp eax, 0x66  # 'f'
+    jg __get_hex_fail
+
+__get_hex_challenge_hex2_pass:
+    sub eax, 0x61  # 'a'
+    add eax, 0xa
+    mov ebx, 0
+    jmp __get_hex_end
+
+__get_hex_fail:
+    mov eax, 0
+    mov ebx, 1
+
+__get_hex_end:
+    mov esp, ebp
+    pop ebp
+    ret
+
 process_line:  # return: 1 if must stop
     push ebp
     mov ebp, esp
 
-    sub esp, 80  # 20 chars * 4  # putstr: str
+    call print_hello
 
     mov ecx, 0
+    mov edx, 0
 
 __process_line_loop1:
     push ecx
+    push edx
 
     call getch
 
+    pop edx
     pop ecx
 
     cmp eax, 0x24  # '$'
+    je __process_line_loop1_end
+    cmp eax, 0x0a  # '\n'
     je __process_line_loop1_end
     cmp eax, 0x2a  # '*'
     je __process_line_stop
     cmp ecx, 20
     je __process_line_loop1_end
 
-    mov [esp + ecx * 4], eax  # print_char_hexes: chs
-    inc ecx
-
     push eax
     push ecx
+    push edx
+
+    push eax  # parse_ch: ch
+    call parse_ch
+    add esp, 4
+
+    add edx, eax
+
+    cmp ebx, 1
+    je __process_line_loop1_fail
+
+    pop edx
+    pop ecx
+    pop eax
+
+    jmp __process_line_loop1_ok
+
+__process_line_loop1_fail:
+    pop edx
+    pop ecx
+    pop eax
+
+    jmp __process_line_loop1_ok_end
+
+__process_line_loop1_ok:
+    inc ecx
+
+    push ecx
+    push edx
 
     push eax  # putch: ch
     call putch
     add esp, 4
 
+    pop edx
     pop ecx
-    pop eax
 
+__process_line_loop1_ok_end:
     jmp __process_line_loop1
 
 __process_line_loop1_end:
-    push ecx  # print_char_hexes: cnt
-    call print_char_hexes
+    push ecx
+    push edx
+
+    call print_delim
+
+    pop edx
+    push edx
+
+    push edx  # print_hex: num
+    call print_hex
+
+    pop edx
+    push edx
+
+    push edx  # print_dec: num
+    call print_dec
+
+    pop edx
+    pop ecx
 
     mov eax, 0
     jmp __process_line_stop_end
