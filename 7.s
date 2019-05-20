@@ -15,6 +15,11 @@ delim:
 
 .set delim_len, . - delim
 
+delim2:
+.ascii " "
+
+.set delim2_len, . - delim2
+
 
 .bss
 
@@ -235,11 +240,13 @@ print_dec:  # args: num
     mov ecx, [ebp + 8]  # num
 
 __print_dec_loop1:
+    mov edx, 0
     mov eax, ecx
     mov ebx, 10
     div ebx
     mov ebx, edx
 
+    mov edx, 0
     mov eax, ecx
     mov ecx, 10
     div ecx
@@ -294,59 +301,67 @@ print_delim:
 
     ret
 
+print_delim2:
+    mov eax, 4  # write(fd, buf, count)
+    mov ebx, 1  # stdout
+    mov ecx, offset delim2
+    mov edx, delim2_len
+    int 0x80
+
+    ret
+
 parse_ch:  # args: ch  # return: num, is_err
     push ebp
     mov ebp, esp
 
     mov eax, [ebp + 8]  # ch
 
-__get_hex_challenge_dec_start:
+__parse_ch_challenge_dec_start:
     cmp eax, 0x30  # '1'
-    jl __get_hex_challenge_hex_start
+    jl __parse_ch_challenge_hex_start
 
-__get_hex_challenge_dec_continue:
+__parse_ch_challenge_dec_continue:
     cmp eax, 0x39  # '9'
-    jg __get_hex_challenge_hex_start
+    jg __parse_ch_challenge_hex_start
 
-__get_hex_challenge_dec_pass:
+__parse_ch_challenge_dec_pass:
     sub eax, 0x30  # '1'
-    add eax, 1
     mov ebx, 0
-    jmp __get_hex_end
+    jmp __parse_ch_end
 
-__get_hex_challenge_hex_start:
+__parse_ch_challenge_hex_start:
     cmp eax, 0x41  # 'A'
-    jl __get_hex_challenge_hex2_start
+    jl __parse_ch_challenge_hex2_start
 
-__get_hex_challenge_hex_continue:
+__parse_ch_challenge_hex_continue:
     cmp eax, 0x46  # 'F'
-    jg __get_hex_challenge_hex2_start
+    jg __parse_ch_challenge_hex2_start
 
-__get_hex_challenge_hex_pass:
+__parse_ch_challenge_hex_pass:
     sub eax, 0x41  # 'A'
     add eax, 0xa
     mov ebx, 0
-    jmp __get_hex_end
+    jmp __parse_ch_end
 
-__get_hex_challenge_hex2_start:
+__parse_ch_challenge_hex2_start:
     cmp eax, 0x61  # 'a'
-    jl __get_hex_fail
+    jl __parse_ch_fail
 
-__get_hex_challenge_hex2_continue:
+__parse_ch_challenge_hex2_continue:
     cmp eax, 0x66  # 'f'
-    jg __get_hex_fail
+    jg __parse_ch_fail
 
-__get_hex_challenge_hex2_pass:
+__parse_ch_challenge_hex2_pass:
     sub eax, 0x61  # 'a'
     add eax, 0xa
     mov ebx, 0
-    jmp __get_hex_end
+    jmp __parse_ch_end
 
-__get_hex_fail:
+__parse_ch_fail:
     mov eax, 0
     mov ebx, 1
 
-__get_hex_end:
+__parse_ch_end:
     mov esp, ebp
     pop ebp
     ret
@@ -357,6 +372,7 @@ process_line:  # return: 1 if must stop
 
     call print_hello
 
+    mov eax, 0
     mov ecx, 0
     mov edx, 0
 
@@ -386,23 +402,16 @@ __process_line_loop1:
     call parse_ch
     add esp, 4
 
+    pop edx
+
+    shl edx, 4
     add edx, eax
 
+    pop ecx
+    pop eax
+
     cmp ebx, 1
-    je __process_line_loop1_fail
-
-    pop edx
-    pop ecx
-    pop eax
-
-    jmp __process_line_loop1_ok
-
-__process_line_loop1_fail:
-    pop edx
-    pop ecx
-    pop eax
-
-    jmp __process_line_loop1_ok_end
+    je __process_line_loop1_ok_end
 
 __process_line_loop1_ok:
     inc ecx
@@ -421,6 +430,9 @@ __process_line_loop1_ok_end:
     jmp __process_line_loop1
 
 __process_line_loop1_end:
+    cmp ecx, 0
+    je __process_line_stop_end
+
     push ecx
     push edx
 
@@ -431,12 +443,19 @@ __process_line_loop1_end:
 
     push edx  # print_hex: num
     call print_hex
+    add esp, 4
+
+    pop edx
+    push edx
+
+    call print_delim2
 
     pop edx
     push edx
 
     push edx  # print_dec: num
     call print_dec
+    add esp, 4
 
     pop edx
     pop ecx
